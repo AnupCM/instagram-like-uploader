@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: Image Upload Service
+  version: 1.0.0
+servers:
+  - url: https://{host}/{stage}
+    variables:
+      host:
+        default: localhost
+      stage:
+        default: dev
+paths:
+  /images:
+    post:
+      summary: Upload image with metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, filename, content_type, image_b64]
+              properties:
+                user_id: { type: string }
+                filename: { type: string }
+                content_type: { type: string }
+                tags: { type: array, items: { type: string } }
+                image_b64: { type: string, format: byte }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  image_id: { type: string }
+                  s3_key: { type: string }
+    get:
+      summary: List images (filter by user_id, tag; optional created_after/before)
+      parameters:
+        - in: query
+          name: user_id
+          schema: { type: string }
+        - in: query
+          name: tag
+          schema: { type: string }
+        - in: query
+          name: created_after
+          schema: { type: string, format: date-time }
+        - in: query
+          name: created_before
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { type: object }
+  /images/{image_id}:
+    get:
+      summary: View/download an image (returns presigned URL)
+      parameters:
+        - in: path
+          name: image_id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: download
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: Delete an image
+      parameters:
+        - in: path
+          name: image_id
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted
