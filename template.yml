@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Image Upload Service (API GW + Lambda + S3 + DynamoDB)
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: images
+  TableName:
+    Type: String
+    Default: ImageMetadata
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 15
+    MemorySize: 256
+    Environment:
+      Variables:
+        BUCKET_NAME: !Ref BucketName
+        DDB_TABLE: !Ref TableName
+
+Resources:
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+
+  ImageTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref TableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: image_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: image_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1UserCreated
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+      EndpointConfiguration: REGIONAL
+      DefinitionBody: !Transform
+        Name: AWS::Include
+        Parameters:
+          Location: openapi.yaml
+
+  UploadFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.handlers.upload_image
+      CodeUri: .
+      Policies:
+        - S3CrudPolicy: { BucketName: !Ref BucketName }
+        - DynamoDBCrudPolicy: { TableName: !Ref TableName }
+      Events:
+        ApiPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /images
+            Method: POST
+
+  ListFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.handlers.list_images
+      CodeUri: .
+      Policies:
+        - DynamoDBReadPolicy: { TableName: !Ref TableName }
+      Events:
+        ApiGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /images
+            Method: GET
+
+  GetFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.handlers.get_image
+      CodeUri: .
+      Policies:
+        - S3ReadPolicy: { BucketName: !Ref BucketName }
+        - DynamoDBReadPolicy: { TableName: !Ref TableName }
+      Events:
+        ApiGetOne:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /images/{image_id}
+            Method: GET
+
+  DeleteFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.handlers.delete_image
+      CodeUri: .
+      Policies:
+        - S3CrudPolicy: { BucketName: !Ref BucketName }
+        - DynamoDBCrudPolicy: { TableName: !Ref TableName }
+      Events:
+        ApiDelete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /images/{image_id}
+            Method: DELETE
