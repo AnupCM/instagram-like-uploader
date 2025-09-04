@@ -1,0 +1,27 @@
+version: "3.8"
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"             # edge
+      - "4510-4559:4510-4559"   # services
+    environment:
+      - SERVICES=s3,dynamodb,apigateway,lambda,cloudformation,sts,iam
+      - DEBUG=1
+      - AWS_DEFAULT_REGION=us-east-1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+  # optional: a SAM CLI builder/runner container pattern
+  sam:
+    image: amazon/aws-sam-cli-build-image-python3.11
+    working_dir: /work
+    volumes:
+      - ./:/work
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - IS_LOCAL=true
+      - LOCALSTACK_URL=http://localstack:4566
